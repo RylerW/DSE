@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const commandShell = process.env.ComSpec || "cmd.exe";
 
 try {
   rmSync(path.join(rootDir, ".next"), { recursive: true, force: true });
@@ -11,7 +12,7 @@ try {
   // Best-effort cleanup so local dev starts from a clean Next build cache.
 }
 
-const child = spawn("npm.cmd", ["exec", "next", "dev"], {
+const child = spawn(commandShell, ["/d", "/s", "/c", "npm.cmd exec next dev"], {
   cwd: rootDir,
   stdio: "inherit",
   shell: false,
