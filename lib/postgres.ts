@@ -3,19 +3,23 @@ import postgres from "postgres";
 let client: postgres.Sql | null = null;
 let schemaPromise: Promise<void> | null = null;
 
-function getClient() {
+function createClient() {
   if (!process.env.DATABASE_URL) {
     throw new Error("DATABASE_URL is not configured.");
   }
 
+  return postgres(process.env.DATABASE_URL, {
+    ssl: "require",
+    max: 5,
+    idle_timeout: 20,
+    connect_timeout: 15,
+    prepare: false,
+  });
+}
+
+function getClient() {
   if (!client) {
-    client = postgres(process.env.DATABASE_URL, {
-      ssl: "require",
-      max: 5,
-      idle_timeout: 20,
-      connect_timeout: 15,
-      prepare: false,
-    });
+    client = createClient();
   }
 
   return client;
@@ -123,6 +127,5 @@ export async function ensureSchema() {
 }
 
 export async function getSql() {
-  await ensureSchema();
   return getClient();
 }

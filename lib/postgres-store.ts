@@ -9,6 +9,7 @@ const SOURCE_NAME = "Dar es Salaam Stock Exchange";
 const OFFICIAL_SOURCE_REFERENCE = "https://dse.co.tz/";
 const USER_ID = "demo-investor";
 const LIVE_SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+const AUTO_SYNC_ON_READ = process.env.AUTO_SYNC_ON_READ === "true";
 
 let lastLiveSyncAttemptAt = 0;
 
@@ -85,6 +86,16 @@ function withSnapshot(db: Database, security: Security): SecurityWithSnapshot {
   };
 }
 
+function toIsoOrNull(value: unknown): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function rowToSecurity(row: Record<string, unknown>): Security {
   return {
     id: String(row.id),
@@ -112,7 +123,7 @@ function rowToSnapshot(row: Record<string, unknown>): PriceSnapshot {
     volume: row.volume === null ? null : Number(row.volume),
     sourceName: String(row.source_name),
     sourceReference: String(row.source_reference),
-    ingestedAt: new Date(String(row.ingested_at)).toISOString(),
+    ingestedAt: toIsoOrNull(row.ingested_at) ?? new Date(0).toISOString(),
   };
 }
 
@@ -125,7 +136,7 @@ function rowToAlert(row: Record<string, unknown>): Alert {
     thresholdValue: Number(row.threshold_value),
     channel: row.channel as Alert["channel"],
     isActive: Boolean(row.is_active),
-    lastTriggeredAt: row.last_triggered_at ? new Date(String(row.last_triggered_at)).toISOString() : null,
+    lastTriggeredAt: toIsoOrNull(row.last_triggered_at),
   };
 }
 
@@ -139,8 +150,8 @@ function rowToNotification(row: Record<string, unknown>): Notification {
     body: String(row.body),
     channel: row.channel as Notification["channel"],
     status: row.status as Notification["status"],
-    createdAt: new Date(String(row.created_at)).toISOString(),
-    sentAt: row.sent_at ? new Date(String(row.sent_at)).toISOString() : null,
+    createdAt: toIsoOrNull(row.created_at) ?? new Date(0).toISOString(),
+    sentAt: toIsoOrNull(row.sent_at),
   };
 }
 
@@ -154,8 +165,8 @@ function rowToRun(row: Record<string, unknown>): IngestionRun {
     recordsInserted: Number(row.records_inserted),
     recordsUpdated: Number(row.records_updated),
     recordsFailed: Number(row.records_failed),
-    startedAt: new Date(String(row.started_at)).toISOString(),
-    completedAt: row.completed_at ? new Date(String(row.completed_at)).toISOString() : null,
+    startedAt: toIsoOrNull(row.started_at) ?? new Date(0).toISOString(),
+    completedAt: toIsoOrNull(row.completed_at),
     errorSummary: row.error_summary ? String(row.error_summary) : null,
   };
 }
@@ -172,15 +183,13 @@ async function loadDatabaseShape(): Promise<Database> {
   const sql = await getSql();
   await ensureDefaultWatchlist();
 
-  const [securitiesRows, snapshotRows, watchlistsRows, watchlistItemsRows, alertRows, notificationRows, runRows] = await Promise.all([
-    sql`select * from securities order by ticker asc`,
-    sql`select * from price_snapshots order by market_date asc`,
-    sql`select * from watchlists order by name asc`,
-    sql`select * from watchlist_items order by watchlist_id asc`,
-    sql`select * from alerts order by id desc`,
-    sql`select * from notifications order by created_at desc`,
-    sql`select * from ingestion_runs order by started_at desc`,
-  ]);
+  const securitiesRows = await sql`select * from securities order by ticker asc`;
+  const snapshotRows = await sql`select * from price_snapshots order by market_date asc`;
+  const watchlistsRows = await sql`select * from watchlists order by name asc`;
+  const watchlistItemsRows = await sql`select * from watchlist_items order by watchlist_id asc`;
+  const alertRows = await sql`select * from alerts order by id desc`;
+  const notificationRows = await sql`select * from notifications order by created_at desc`;
+  const runRows = await sql`select * from ingestion_runs order by started_at desc`;
 
   return {
     securities: securitiesRows.map((row) => rowToSecurity(row as Record<string, unknown>)),
@@ -194,6 +203,8 @@ async function loadDatabaseShape(): Promise<Database> {
 }
 
 async function maybeAutoSync() {
+  if (!AUTO_SYNC_ON_READ) return;
+
   const now = Date.now();
   if (now - lastLiveSyncAttemptAt < LIVE_SYNC_COOLDOWN_MS) return;
 

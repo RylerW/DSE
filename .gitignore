@@ -5,3 +5,6 @@ node_modules
 .cloudflare
 .env.local
 .dev.vars
+
+.dev-server.out.log
+.dev-server.err.log
