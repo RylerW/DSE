@@ -2,6 +2,14 @@ import { formatMoney } from "@/lib/format";
 import type { PriceSnapshot } from "@/lib/types";
 
 export function HistoryChart({ history }: { history: PriceSnapshot[] }) {
+  if (history.length === 0) {
+    return (
+      <div className="chart-card">
+        <div className="chart-empty muted-copy">Not enough history yet to render a chart.</div>
+      </div>
+    );
+  }
+
   const width = 640;
   const height = 240;
   const padding = 24;
@@ -34,4 +42,3 @@ export function HistoryChart({ history }: { history: PriceSnapshot[] }) {
     </div>
   );
 }
-

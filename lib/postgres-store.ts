@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { cache } from "react";
 
 import { fetchLatestDseMarketData } from "@/lib/dse-source";
 import { emailDeliveryEnabled, getAlertEmailRecipient, sendAlertEmail } from "@/lib/email";
@@ -171,6 +172,28 @@ function rowToRun(row: Record<string, unknown>): IngestionRun {
   };
 }
 
+function buildSecurityWithSnapshots(securities: Security[], snapshots: PriceSnapshot[]) {
+  const snapshotsBySecurity = new Map<string, PriceSnapshot[]>();
+  for (const snapshot of snapshots) {
+    const existing = snapshotsBySecurity.get(snapshot.securityId);
+    if (existing) {
+      existing.push(snapshot);
+    } else {
+      snapshotsBySecurity.set(snapshot.securityId, [snapshot]);
+    }
+  }
+
+  return securities.map((security) => {
+    const history = sortHistory(snapshotsBySecurity.get(security.id) ?? []);
+    return {
+      ...security,
+      latestSnapshot: history.at(-1) ?? null,
+      trend: computeTrend(history),
+      history,
+    } satisfies SecurityWithSnapshot;
+  });
+}
+
 async function ensureDefaultWatchlist() {
   const sql = await getSql();
   const existing = await sql`select id from watchlists where user_id = ${USER_ID} limit 1`;
@@ -179,7 +202,7 @@ async function ensureDefaultWatchlist() {
   }
 }
 
-async function loadDatabaseShape(): Promise<Database> {
+const loadDatabaseShape = cache(async (): Promise<Database> => {
   const sql = await getSql();
   await ensureDefaultWatchlist();
 
@@ -200,7 +223,7 @@ async function loadDatabaseShape(): Promise<Database> {
     notifications: notificationRows.map((row) => rowToNotification(row as Record<string, unknown>)),
     ingestionRuns: runRows.map((row) => rowToRun(row as Record<string, unknown>)),
   };
-}
+});
 
 async function maybeAutoSync() {
   if (!AUTO_SYNC_ON_READ) return;
@@ -287,13 +310,42 @@ async function evaluateAlertsForMarketDate(marketDate: string) {
 
 export async function getMarketOverview(): Promise<MarketOverview> {
   await maybeAutoSync();
-  const db = await loadDatabaseShape();
-  const securities = db.securities.map((security) => withSnapshot(db, security));
+  const sql = await getSql();
+  const runRows = await sql`select * from ingestion_runs order by started_at desc limit 1`;
+  const latestRun = runRows[0] ? rowToRun(runRows[0] as Record<string, unknown>) : null;
+  const marketDate = latestRun?.marketDate ?? "";
+  const lastUpdated = latestRun?.completedAt ?? latestRun?.startedAt ?? new Date().toISOString();
+  const securitiesRows = await sql`
+    select distinct s.*
+    from securities s
+    join price_snapshots ps on ps.security_id = s.id
+    where ps.market_date = ${marketDate}
+    order by s.ticker asc
+  `;
+  const snapshotRows = await sql`
+    with ranked_snapshots as (
+      select
+        ps.*,
+        row_number() over (partition by ps.security_id order by ps.market_date desc) as snapshot_rank
+      from price_snapshots ps
+      where ps.security_id in (
+        select security_id
+        from price_snapshots
+        where market_date = ${marketDate}
+      )
+    )
+    select *
+    from ranked_snapshots
+    where snapshot_rank <= 5
+    order by market_date asc
+  `;
+  const securities = buildSecurityWithSnapshots(
+    securitiesRows.map((row) => rowToSecurity(row as Record<string, unknown>)),
+    snapshotRows.map((row) => rowToSnapshot(row as Record<string, unknown>)),
+  );
   const withPrices = securities.filter((security) => security.latestSnapshot !== null);
   const byGain = [...withPrices].sort((a, b) => (b.latestSnapshot?.percentChange ?? 0) - (a.latestSnapshot?.percentChange ?? 0));
   const byVolume = [...withPrices].sort((a, b) => (b.latestSnapshot?.volume ?? 0) - (a.latestSnapshot?.volume ?? 0));
-  const marketDate = db.ingestionRuns[0]?.marketDate ?? "";
-  const lastUpdated = db.ingestionRuns[0]?.completedAt ?? db.ingestionRuns[0]?.startedAt ?? new Date().toISOString();
   const freshness = marketDate >= currentDseDate() ? "FRESH" : "STALE";
 
   return {
@@ -352,10 +404,35 @@ export async function removeWatchlistSecurity(securityId: string) {
 
 export async function listAlerts() {
   await maybeAutoSync();
-  const db = await loadDatabaseShape();
-  return db.alerts.map((alert) => ({
-    ...alert,
-    security: db.securities.find((item) => item.id === alert.securityId) ?? null,
+  const sql = await getSql();
+  const rows = await sql`
+    select
+      a.*,
+      s.id as security_join_id,
+      s.ticker as security_ticker,
+      s.company_name as security_company_name,
+      s.sector as security_sector,
+      s.listing_type as security_listing_type,
+      s.listing_date as security_listing_date,
+      s.is_active as security_is_active
+    from alerts a
+    left join securities s on s.id = a.security_id
+    order by a.id desc
+  `;
+
+  return rows.map((row) => ({
+    ...rowToAlert(row as Record<string, unknown>),
+    security: row.security_join_id
+      ? {
+          id: String(row.security_join_id),
+          ticker: String(row.security_ticker),
+          companyName: String(row.security_company_name),
+          sector: String(row.security_sector),
+          listingType: row.security_listing_type as Security["listingType"],
+          listingDate: String(row.security_listing_date).slice(0, 10),
+          isActive: Boolean(row.security_is_active),
+        }
+      : null,
   }));
 }
 
@@ -373,13 +450,15 @@ export async function toggleAlert(alertId: string) {
 }
 
 export async function listNotifications() {
-  const db = await loadDatabaseShape();
-  return db.notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const sql = await getSql();
+  const rows = await sql`select * from notifications order by created_at desc limit 50`;
+  return rows.map((row) => rowToNotification(row as Record<string, unknown>));
 }
 
 export async function listIngestionRuns() {
-  const db = await loadDatabaseShape();
-  return db.ingestionRuns.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  const sql = await getSql();
+  const rows = await sql`select * from ingestion_runs order by started_at desc limit 100`;
+  return rows.map((row) => rowToRun(row as Record<string, unknown>));
 }
 
 export async function runOfficialIngestion(recordFailure = true) {

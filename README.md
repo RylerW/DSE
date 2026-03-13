@@ -16,6 +16,7 @@ npm.cmd run build
 npm.cmd run db:migrate
 npm.cmd run db:seed
 npm.cmd run sync:dse
+npm.cmd run backfill:dse-history
 npm.cmd run cf:build
 npm.cmd run cf:deploy
 ```
@@ -36,8 +37,12 @@ SYNC_WEBHOOK_SECRET=
 2. Run `npm.cmd run db:migrate`.
 3. Run `npm.cmd run db:seed` if you want to import the current local JSON dataset.
 4. Run `npm.cmd run sync:dse` to pull the latest official DSE market page into Postgres.
+5. Run `npm.cmd run backfill:dse-history` to import roughly 90 calendar days of history for the 20 most-traded DSE equities based on the latest market session.
 
 If `DATABASE_URL` is not set, the app falls back to the existing local JSON store so development can continue without a database.
+
+## Local Dev Stability
+`npm.cmd run dev` now clears `.next` before starting Next.js. That avoids the intermittent stale chunk issue where CSS disappears and the app temporarily renders as plain HTML during local development.
 
 ## Cloudflare Workers Deployment
 1. Push this project to GitHub.

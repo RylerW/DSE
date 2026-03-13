@@ -17,12 +17,16 @@ export function formatPercent(value: number | null) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-export function formatDateTime(value: string) {
+export function formatDateTime(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Africa/Dar_es_Salaam",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function trendLabel(trend: "UP" | "DOWN" | "FLAT") {

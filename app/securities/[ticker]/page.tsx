@@ -17,8 +17,9 @@ export default async function SecurityDetailPage({ params }: { params: Promise<{
   const current = latest?.lastPrice ?? null;
   const byRange = (points: number) => {
     const history = security.history;
-    const start = history[Math.max(history.length - points, 0)] ?? history[0];
-    if (!start || !latest) return null;
+    if (history.length <= points) return null;
+    const start = history[history.length - (points + 1)];
+    if (!start || !latest || start.lastPrice === 0) return null;
     return Number((((latest.lastPrice - start.lastPrice) / start.lastPrice) * 100).toFixed(2));
   };
 
@@ -29,7 +30,7 @@ export default async function SecurityDetailPage({ params }: { params: Promise<{
           <div>
             <p className="eyebrow">Security Detail</p>
             <h1>{security.companyName} ({security.ticker})</h1>
-            <p className="muted-copy">{security.sector} Ã‚Â· {security.listingType.replace("_", " ")}</p>
+            <p className="muted-copy">{security.sector} | {security.listingType.replace("_", " ")}</p>
           </div>
           <div className="actions-inline">
             <form action={addToWatchlistAction}>
@@ -104,5 +105,3 @@ export default async function SecurityDetailPage({ params }: { params: Promise<{
     </div>
   );
 }
-
-

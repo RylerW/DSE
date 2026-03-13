@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-server.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -13,7 +13,8 @@
     "cf:build": "opennextjs-cloudflare build",
     "cf:preview": "opennextjs-cloudflare build && wrangler dev",
     "cf:deploy": "opennextjs-cloudflare build && wrangler deploy",
-    "cf:typegen": "wrangler types"
+    "cf:typegen": "wrangler types",
+    "backfill:dse-history": "node scripts/backfill-dse-history.mjs"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.17.1",
