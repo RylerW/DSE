@@ -9,7 +9,7 @@ function createClient() {
   }
 
   return postgres(process.env.DATABASE_URL, {
-    ssl: "require",
+    ssl: {},
     max: 5,
     idle_timeout: 20,
     connect_timeout: 15,
