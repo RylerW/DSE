@@ -5,6 +5,7 @@ A full-stack Next.js app for tracking Dar es Salaam Stock Exchange securities, p
 ## Production Stack
 - Next.js App Router
 - Cloudflare Workers via OpenNext
+- Cloudflare Hyperdrive for Worker-to-Postgres connectivity
 - PostgreSQL for market, watchlist, alert, notification, and ingestion data
 - Resend for email alerts
 
@@ -46,21 +47,23 @@ If `DATABASE_URL` is not set, the app falls back to the existing local JSON stor
 
 ## Cloudflare Workers Deployment
 1. Push this project to GitHub.
-2. Provision a Postgres database and collect the connection string.
-3. Create a Resend API key and verify your sending domain or sender.
-4. Add secrets in Cloudflare Workers:
-   - `DATABASE_URL`
+2. Provision a Postgres database and collect the direct connection string.
+3. In Cloudflare, create a Hyperdrive configuration that points to that Postgres database.
+4. Bind the Hyperdrive configuration to this Worker as `HYPERDRIVE`.
+5. Add Worker secrets in Cloudflare for:
    - `RESEND_API_KEY`
    - `ALERT_EMAIL_TO`
    - `ALERT_EMAIL_FROM`
    - `SYNC_WEBHOOK_SECRET`
-5. Build for Cloudflare with `npm.cmd run cf:build`.
-6. Deploy with `npm.cmd run cf:deploy`.
+6. Keep `DATABASE_URL` for local scripts and development. The deployed Worker now prefers `HYPERDRIVE.connectionString` automatically.
+7. Build for Cloudflare with `npm.cmd run cf:build`.
+8. Deploy with `npm.cmd run cf:deploy`.
 
 Key deployment files:
 - `open-next.config.ts`
 - `wrangler.jsonc`
 - `db/schema.sql`
+- `lib/postgres.ts`
 
 ## Scheduled Sync Option
 A secure sync endpoint is available at `POST /api/admin/sync`.
@@ -73,4 +76,4 @@ You can use that endpoint from an external scheduler or CI workflow.
 ## Notes
 - The Postgres-backed store lives in `lib/postgres-store.ts`.
 - The local fallback store lives in `lib/local-store.ts`.
-- `lib/store.ts` chooses the correct backend automatically based on `DATABASE_URL`.
+- `lib/store.ts` chooses the correct backend automatically based on Hyperdrive or `DATABASE_URL` availability.

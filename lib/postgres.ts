@@ -1,14 +1,42 @@
 import postgres from "postgres";
 
-let client: postgres.Sql | null = null;
+interface HyperdriveBinding {
+  connectionString?: string;
+}
+
+interface CloudflareRuntimeEnv {
+  HYPERDRIVE?: HyperdriveBinding;
+}
+
+let clientPromise: Promise<postgres.Sql> | null = null;
 let schemaPromise: Promise<void> | null = null;
 
-function createClient() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is not configured.");
+async function getHyperdriveConnectionString() {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    const connectionString = (env as CloudflareRuntimeEnv).HYPERDRIVE?.connectionString;
+    return typeof connectionString === "string" && connectionString.length > 0 ? connectionString : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveConnectionString() {
+  const hyperdriveConnectionString = await getHyperdriveConnectionString();
+  if (hyperdriveConnectionString) {
+    return hyperdriveConnectionString;
   }
 
-  return postgres(process.env.DATABASE_URL, {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+
+  throw new Error("Neither HYPERDRIVE nor DATABASE_URL is configured.");
+}
+
+function createClient(connectionString: string) {
+  return postgres(connectionString, {
     ssl: {},
     max: 5,
     idle_timeout: 20,
@@ -17,12 +45,12 @@ function createClient() {
   });
 }
 
-function getClient() {
-  if (!client) {
-    client = createClient();
+async function getClient() {
+  if (!clientPromise) {
+    clientPromise = resolveConnectionString().then((connectionString) => createClient(connectionString));
   }
 
-  return client;
+  return clientPromise;
 }
 
 export function hasDatabaseUrl() {
@@ -31,7 +59,7 @@ export function hasDatabaseUrl() {
 
 export async function ensureSchema() {
   if (!schemaPromise) {
-    const sql = getClient();
+    const sql = await getClient();
     schemaPromise = (async () => {
       await sql`
         create table if not exists securities (

@@ -2,7 +2,25 @@ import type { Alert } from "@/lib/types";
 
 type StoreModule = typeof import("@/lib/postgres-store");
 
+interface HyperdriveBinding {
+  connectionString?: string;
+}
+
+interface CloudflareRuntimeEnv {
+  HYPERDRIVE?: HyperdriveBinding;
+}
+
 let storeModulePromise: Promise<StoreModule> | null = null;
+
+async function hasHyperdriveBinding() {
+  try {
+    const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+    const { env } = await getCloudflareContext({ async: true });
+    return Boolean((env as CloudflareRuntimeEnv).HYPERDRIVE?.connectionString);
+  } catch {
+    return false;
+  }
+}
 
 async function loadStore(): Promise<StoreModule> {
   if (storeModulePromise) {
@@ -10,7 +28,7 @@ async function loadStore(): Promise<StoreModule> {
   }
 
   storeModulePromise = (async () => {
-    if (process.env.DATABASE_URL) {
+    if ((await hasHyperdriveBinding()) || process.env.DATABASE_URL) {
       return (await import("@/lib/postgres-store")) as StoreModule;
     }
 
