@@ -8,6 +8,11 @@ interface HyperdriveBinding {
 
 interface CloudflareRuntimeEnv {
   HYPERDRIVE?: HyperdriveBinding;
+  dse?: HyperdriveBinding;
+}
+
+function getConfiguredHyperdrive(env: CloudflareRuntimeEnv) {
+  return env.HYPERDRIVE ?? env.dse ?? null;
 }
 
 let storeModulePromise: Promise<StoreModule> | null = null;
@@ -16,7 +21,7 @@ async function hasHyperdriveBinding() {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = await getCloudflareContext({ async: true });
-    return Boolean((env as CloudflareRuntimeEnv).HYPERDRIVE?.connectionString);
+    return Boolean(getConfiguredHyperdrive(env as CloudflareRuntimeEnv)?.connectionString);
   } catch {
     return false;
   }

@@ -6,6 +6,11 @@ interface HyperdriveBinding {
 
 interface CloudflareRuntimeEnv {
   HYPERDRIVE?: HyperdriveBinding;
+  dse?: HyperdriveBinding;
+}
+
+function getConfiguredHyperdrive(env: CloudflareRuntimeEnv) {
+  return env.HYPERDRIVE ?? env.dse ?? null;
 }
 
 let clientPromise: Promise<postgres.Sql> | null = null;
@@ -15,7 +20,7 @@ async function getHyperdriveConnectionString() {
   try {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
     const { env } = await getCloudflareContext({ async: true });
-    const connectionString = (env as CloudflareRuntimeEnv).HYPERDRIVE?.connectionString;
+    const connectionString = getConfiguredHyperdrive(env as CloudflareRuntimeEnv)?.connectionString;
     return typeof connectionString === "string" && connectionString.length > 0 ? connectionString : null;
   } catch {
     return null;
@@ -32,7 +37,7 @@ async function resolveConnectionString() {
     return process.env.DATABASE_URL;
   }
 
-  throw new Error("Neither HYPERDRIVE nor DATABASE_URL is configured.");
+  throw new Error("Neither a Hyperdrive binding (HYPERDRIVE or dse) nor DATABASE_URL is configured.");
 }
 
 function createClient(connectionString: string) {
