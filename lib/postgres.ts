@@ -9,6 +9,11 @@ interface CloudflareRuntimeEnv {
   dse?: HyperdriveBinding;
 }
 
+interface ConnectionConfig {
+  connectionString: string;
+  source: "hyperdrive" | "database-url";
+}
+
 function getConfiguredHyperdrive(env: CloudflareRuntimeEnv) {
   return env.HYPERDRIVE ?? env.dse ?? null;
 }
@@ -27,32 +32,42 @@ async function getHyperdriveConnectionString() {
   }
 }
 
-async function resolveConnectionString() {
+async function resolveConnectionConfig(): Promise<ConnectionConfig> {
   const hyperdriveConnectionString = await getHyperdriveConnectionString();
   if (hyperdriveConnectionString) {
-    return hyperdriveConnectionString;
+    return { connectionString: hyperdriveConnectionString, source: "hyperdrive" };
   }
 
   if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
+    return { connectionString: process.env.DATABASE_URL, source: "database-url" };
   }
 
   throw new Error("Neither a Hyperdrive binding (HYPERDRIVE or dse) nor DATABASE_URL is configured.");
 }
 
-function createClient(connectionString: string) {
-  return postgres(connectionString, {
-    ssl: {},
-    max: 5,
-    idle_timeout: 20,
-    connect_timeout: 15,
-    prepare: false,
-  });
+function createClient(config: ConnectionConfig) {
+  return postgres(
+    config.connectionString,
+    config.source === "hyperdrive"
+      ? {
+          max: 5,
+          idle_timeout: 20,
+          connect_timeout: 15,
+          prepare: false,
+        }
+      : {
+          ssl: {},
+          max: 5,
+          idle_timeout: 20,
+          connect_timeout: 15,
+          prepare: false,
+        },
+  );
 }
 
 async function getClient() {
   if (!clientPromise) {
-    clientPromise = resolveConnectionString().then((connectionString) => createClient(connectionString));
+    clientPromise = resolveConnectionConfig().then((config) => createClient(config));
   }
 
   return clientPromise;
