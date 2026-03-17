@@ -44,7 +44,12 @@ export async function toggleAlertAction(formData: FormData) {
 }
 
 export async function runIngestionAction() {
-  await runOfficialIngestion();
+  try {
+    await runOfficialIngestion();
+  } catch (error) {
+    console.error("Official DSE sync failed.", error);
+  }
+
   revalidatePath("/");
   revalidatePath("/watchlist");
   revalidatePath("/alerts");

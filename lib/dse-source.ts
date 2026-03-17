@@ -38,6 +38,7 @@ const DSE_URL = "https://dse.co.tz/";
 const RANGE_URL = "https://dse.co.tz/api/get/market/prices/for/range";
 const DURATION_URL = "https://dse.co.tz/api/get/market/prices/for/range/duration";
 const SOURCE_NAME = "Dar es Salaam Stock Exchange";
+const FETCH_TIMEOUT_MS = 12000;
 
 const companyNames: Record<string, string> = {
   AFRIPRISE: "AfriPrecise Holdings",
@@ -123,8 +124,27 @@ function toIsoDate(raw: unknown) {
   return date.toISOString().slice(0, 10);
 }
 
+async function fetchWithTimeout(input: string, init: RequestInit) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error(`DSE request timed out after ${FETCH_TIMEOUT_MS}ms.`)), FETCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`DSE request timed out after ${FETCH_TIMEOUT_MS}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "user-agent": "Mozilla/5.0 (compatible; TanzaniaDseDashboard/1.0)",
       accept: "application/json,text/plain,*/*",
@@ -140,7 +160,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export async function fetchLatestDseMarketData(): Promise<LiveDseMarketData> {
-  const response = await fetch(DSE_URL, {
+  const response = await fetchWithTimeout(DSE_URL, {
     headers: {
       "user-agent": "Mozilla/5.0 (compatible; TanzaniaDseDashboard/1.0)",
       accept: "text/html,application/xhtml+xml",
