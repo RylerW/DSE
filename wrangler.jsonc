@@ -4,14 +4,12 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-03-12",
   "compatibility_flags": ["nodejs_compat"],
-  // After creating a Hyperdrive configuration in Cloudflare, add its id here
-  // or create a binding named HYPERDRIVE in the dashboard.
-  // "hyperdrive": [
-  //   {
-  //     "binding": "HYPERDRIVE",
-  //     "id": "your-hyperdrive-id"
-  //   }
-  // ],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "d5909fa4ce384c9a9d0fe5ef12ee61c4"
+    }
+  ],
   "assets": {
     "binding": "ASSETS",
     "directory": ".open-next/assets"
