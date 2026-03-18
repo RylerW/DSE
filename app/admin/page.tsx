@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { runIngestionAction } from "@/app/actions";
+import { AdminSyncButton } from "@/components/admin-sync-button";
 import { formatDateTime } from "@/lib/format";
 import { listIngestionRuns } from "@/lib/store";
 
@@ -16,9 +16,7 @@ export default async function AdminPage() {
             <p className="eyebrow">Admin</p>
             <h1>Data health and ingestion</h1>
           </div>
-          <form action={runIngestionAction}>
-            <button type="submit" className="primary-button">Run official DSE sync</button>
-          </form>
+          <AdminSyncButton />
         </div>
         <div className="status-strip compact-strip">
           <div>
@@ -78,4 +76,3 @@ export default async function AdminPage() {
     </div>
   );
 }
-
