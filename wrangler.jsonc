@@ -4,12 +4,6 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-03-12",
   "compatibility_flags": ["nodejs_compat"],
-  "hyperdrive": [
-    {
-      "binding": "HYPERDRIVE",
-      "id": "d5909fa4ce384c9a9d0fe5ef12ee61c4"
-    }
-  ],
   "assets": {
     "binding": "ASSETS",
     "directory": ".open-next/assets"
